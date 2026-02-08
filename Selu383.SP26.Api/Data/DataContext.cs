@@ -2,10 +2,12 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Selu383.SP26.Api.Features.Locations;
+using Selu383.SP26.Api.Features.Roles;
+using Selu383.SP26.Api.Features.Users;
 
 namespace Selu383.SP26.Api.Data;
 
-public class DataContext : DbContext
+public class DataContext : IdentityDbContext<User, Role, int>
 {
     public DataContext(DbContextOptions<DataContext> options) : base(options)
     {
