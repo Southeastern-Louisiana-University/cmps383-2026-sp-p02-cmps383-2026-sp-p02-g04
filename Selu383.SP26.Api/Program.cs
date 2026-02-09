@@ -1,6 +1,9 @@
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Selu383.SP26.Api.Data;
-using Selu383.SP26.Api.Features.Locations;
+using Selu383.SP26.Api.Features.Locations; 
+using Selu383.SP26.Api.Features.Users;
+using Selu383.SP26.Api.Features.Roles;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -12,6 +15,24 @@ builder.Services.AddControllers();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+//add identity services-Terri
+builder.Services.AddIdentity<User, Role>()
+    .AddEntityFrameworkStores<DataContext>()
+    .AddDefaultTokenProviders();
+//fix 404 redirect issue-Terri
+builder.Services.ConfigureApplicationCookie(options =>
+{
+    options.Events.OnRedirectToLogin = context =>
+    {
+        context.Response.StatusCode = 401;
+        return Task.CompletedTask;
+    };
+    options.Events.OnRedirectToAccessDenied = context =>
+    {
+        context.Response.StatusCode = 403;
+        return Task.CompletedTask;
+    };
+});
 
 var app = builder.Build();
 using (var scope = app.Services.CreateScope())
