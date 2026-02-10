@@ -1,6 +1,9 @@
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Selu383.SP26.Api.Data;
-using Selu383.SP26.Api.Features.Locations;
+using Selu383.SP26.Api.Features.Locations; 
+using Selu383.SP26.Api.Features.Users;
+using Selu383.SP26.Api.Features.Roles;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -8,25 +11,79 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddDbContext<DataContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DataContext")));
 
+//add identity services-Terri
+builder.Services.AddIdentity<User, Role>()
+    .AddEntityFrameworkStores<DataContext>()
+    .AddDefaultTokenProviders();
+
 builder.Services.AddControllers();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+//fix 404 redirect issue-Terri
+builder.Services.ConfigureApplicationCookie(options =>
+{
+    options.Events.OnRedirectToLogin = context =>
+    {
+        context.Response.StatusCode = 401;
+        return Task.CompletedTask;
+    };
+    options.Events.OnRedirectToAccessDenied = context =>
+    {
+        context.Response.StatusCode = 403;
+        return Task.CompletedTask;
+    };
+});
+
 var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<DataContext>();
-    db.Database.Migrate();
+    var userManager = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
+    var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<Role>>();
+
+    
+
+    // migrates db and creates tables if they don't exist
+    await db.Database.MigrateAsync();
 
     if (!db.Locations.Any())
     {
         db.Locations.AddRange(
-            new Location { Name = "Location 1", Address = "123 Main St", TableCount = 10 },
-            new Location { Name = "Location 2", Address = "456 Oak Ave", TableCount = 20 },
-            new Location { Name = "Location 3", Address = "789 Pine Ln", TableCount = 15 }
+            new Location { Name = "Location 1", Address = "383 Cherry Lane", TableCount = 0 },
+            new Location { Name = "Location 2", Address = "290 Alkadi Ave", TableCount = 20 },
+            new Location { Name = "Location 3", Address = "717 MLK Dr", TableCount = 15 }
         );
-        db.SaveChanges();
+        await db.SaveChangesAsync();
+    }
+    if (!await roleManager.RoleExistsAsync("Admin"))
+    {
+        await roleManager.CreateAsync(new Role { Name = "Admin" });
+    }
+    if (!await roleManager.RoleExistsAsync("User"))
+    {
+        await roleManager.CreateAsync(new Role { Name = "User" });
+    }
+    //seeding users -Terri
+    if (await userManager.FindByNameAsync("bob") == null)
+    {
+        var bob = new User { UserName = "bob" };
+        await userManager.CreateAsync(bob, "Password123!");
+        await userManager.AddToRoleAsync(bob, "User");
+    }
+    if (await userManager.FindByNameAsync("sue") == null)
+    {
+        var sue = new User { UserName = "sue" };
+        await userManager.CreateAsync(sue, "Password123!");
+        await userManager.AddToRoleAsync(sue, "User");
+    }
+    //galkadi(admin)
+    if (await userManager.FindByNameAsync("galkadi") == null)
+    {
+        var admin = new User { UserName = "galkadi" };
+        await userManager.CreateAsync(admin, "Password123!");
+        await userManager.AddToRoleAsync(admin, "Admin");
     }
 }
 
@@ -39,7 +96,8 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-app.UseAuthorization();
+app.UseAuthentication(); //checks identity
+app.UseAuthorization(); //checks permissions
 
 app.MapControllers();
 
@@ -48,3 +106,4 @@ app.Run();
 //see: https://docs.microsoft.com/en-us/aspnet/core/test/integration-tests?view=aspnetcore-8.0
 // Hi 383 - this is added so we can test our web project automatically
 public partial class Program { }
+//
