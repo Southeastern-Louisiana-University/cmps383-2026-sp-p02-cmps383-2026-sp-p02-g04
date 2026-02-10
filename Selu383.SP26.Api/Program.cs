@@ -42,7 +42,8 @@ using (var scope = app.Services.CreateScope())
     var db = scope.ServiceProvider.GetRequiredService<DataContext>();
     var userManager = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
     var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<Role>>();
-    db.Database.Migrate();
+
+    
 
     // migrates db and creates tables if they don't exist
     await db.Database.MigrateAsync();
@@ -50,7 +51,7 @@ using (var scope = app.Services.CreateScope())
     if (!db.Locations.Any())
     {
         db.Locations.AddRange(
-            new Location { Name = "Location 1", Address = "383 Cherry Lane", TableCount = 10 },
+            new Location { Name = "Location 1", Address = "383 Cherry Lane", TableCount = 0 },
             new Location { Name = "Location 2", Address = "290 Alkadi Ave", TableCount = 20 },
             new Location { Name = "Location 3", Address = "717 MLK Dr", TableCount = 15 }
         );
@@ -73,16 +74,16 @@ using (var scope = app.Services.CreateScope())
     }
     if (await userManager.FindByNameAsync("sue") == null)
     {
-        var bob = new User { UserName = "sue" };
-        await userManager.CreateAsync(bob, "Password123!");
-        await userManager.AddToRoleAsync(bob, "User");
+        var sue = new User { UserName = "sue" };
+        await userManager.CreateAsync(sue, "Password123!");
+        await userManager.AddToRoleAsync(sue, "User");
     }
     //galkadi(admin)
     if (await userManager.FindByNameAsync("galkadi") == null)
     {
-        var bob = new User { UserName = "galkadi" };
-        await userManager.CreateAsync(bob, "Password123!");
-        await userManager.AddToRoleAsync(bob, "Admin");
+        var admin = new User { UserName = "galkadi" };
+        await userManager.CreateAsync(admin, "Password123!");
+        await userManager.AddToRoleAsync(admin, "Admin");
     }
 }
 
@@ -105,3 +106,4 @@ app.Run();
 //see: https://docs.microsoft.com/en-us/aspnet/core/test/integration-tests?view=aspnetcore-8.0
 // Hi 383 - this is added so we can test our web project automatically
 public partial class Program { }
+//

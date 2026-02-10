@@ -3,147 +3,149 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Selu383.SP26.Api.Data;
 using Selu383.SP26.Api.Features.Locations;
-using System.Security.Claims; //used to find who is logged in 
+using System.Security.Claims;
+using Selu383.SP26.Api.Features.Roles;
+
 
 
 namespace Selu383.SP26.Api.Controllers;
 
 [Route("api/locations")]
 [ApiController]
-public class LocationsController(DataContext dataContext) : ControllerBase
+public class LocationsController : ControllerBase
 {
+    private readonly DataContext _dataContext;
+    public LocationsController(DataContext dataContext)
+    {
+        _dataContext = dataContext;
+    }
+
     [HttpGet]
-    public async Task<ActionResult<List<LocationDto>>> GetAll()
+    public async Task<ActionResult<IEnumerable<LocationDto>>> GetAll()
     {
         // grab data
-        var locations = await dataContext.Locations.ToListAsync();
+        var locations = await _dataContext.Locations.ToListAsync();
         // map to dto
         var dtos = locations.Select(x => new LocationDto
         {
             Id = x.Id,
             Name = x.Name,
             Address = x.Address,
-            ManagerId = x.ManagerId
-        }).ToList();
+            ManagerId = x.ManagerId,
+            TableCount = x.TableCount
+        });
 
         return Ok(dtos);
     }
         [HttpGet("{id}")]
         public async Task<ActionResult<LocationDto>> GetById(int id)
         {
-            var location = await dataContext.Locations.FindAsync(id);
-
+            var location = await _dataContext.Locations.FindAsync(id);
             if (location == null)
             {
                 return NotFound();
             }
+        var dto = new LocationDto
+        {
+            Id = location.Id,
+            Name = location.Name,
+            Address = location.Address,
+            ManagerId = location.ManagerId,
+            TableCount = location.TableCount
+        };
 
-            return Ok(new LocationDto
-            {
-                Id = location.Id,
-                Name = location.Name,
-                Address = location.Address,
-                TableCount = location.TableCount,
-                ManagerId = location.ManagerId
-            });
+        return Ok(dto);
         }
 
     [HttpPost]
     [Authorize(Roles = "Admin")] //only allow admins to create locations
-    public async Task<ActionResult<LocationDto>> Create(LocationCreateDto dto)
+    public async Task<ActionResult<LocationDto>> Create(LocationDto dto)
     {
-        if (dto.ManagerId.HasValue)//validdate manager exista
-
+        //name too long check
+        if (dto.Name.Length > 120 || dto.Address.Length > 120)
         {
-            var managerExists = await dataContext.Users.AnyAsync(u => u.Id == dto.ManagerId.Value);
-            if (!managerExists)
-            {
-                return BadRequest("Invalid ManagerId");
-            }
+            return BadRequest("The Name or Address must be 120 characters or less.");
+
         }
+        //validation table count check; check if it's null or 0 or less
+        if (dto.TableCount == null || dto.TableCount <= 0)
+        {
+            return BadRequest("The table count must be at least one.");
+        }
+        //mapping dto to entity
         var location = new Location
         {
             Name = dto.Name,
             Address = dto.Address,
-            TableCount = dto.TableCount,
-            ManagerId = dto.ManagerId
+            ManagerId = dto.ManagerId,
+            TableCount = dto.TableCount.Value //extracts num from nullable
         };
-
-        dataContext.Locations.Add(location);
-        await dataContext.SaveChangesAsync();
-
-        var resultDto = new LocationDto
-        {
-            Id = location.Id,
-            Name = location.Name,
-            Address = location.Address,
-            TableCount = location.TableCount,
-            ManagerId = location.ManagerId
-        };
-        return CreatedAtAction(nameof(GetById), new { id = location.Id }, resultDto);
+        //save to db
+        _dataContext.Locations.Add(location);
+        await _dataContext.SaveChangesAsync();
+        //return result
+        dto.Id = location.Id;
+        return CreatedAtAction(nameof(GetById), new { id = location.Id }, dto);
     }
 
     [HttpPut("{id}")]
-    [Authorize] //has to be logged in
-    public async Task<ActionResult<LocationDto>> Update(int id, LocationCreateDto dto)
+    [Authorize]
+    public async Task<ActionResult<LocationDto>> Update(int id, LocationDto dto)
     {
-        var location = await dataContext.Locations.FindAsync(id);
-        if (location == null) return NotFound();
-        //check permissions
-        //get logged in user id
-        var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-        var isAdmin = User.IsInRole("Admin");
-        var isManager = location.ManagerId == userId;
-
-        //managers can only update their own location, admins can update any location
-        if (!isAdmin && !isManager)
+        //validation length check
+        if (dto.Name.Length > 120 || dto.Address.Length > 120)
         {
-            return Forbid();
-        }
-        //managers can't change the manager of the location only the admins can
-        if (!isAdmin && dto.ManagerId != location.ManagerId)
-        {
-            return Forbid();
-        }
+            return BadRequest("The Name or Address must be 120 characters or less.");
 
+        }
+        //validation table count check; checks if it's null or 0 or less
+        if (dto.TableCount == null || dto.TableCount <= 0) 
+        {
+            return BadRequest("TableCount must be at least 1.");
+        }
+        //find existing lo
+        var location = await _dataContext.Locations.FindAsync(id);
+        if (location == null)
+        {
+            return NotFound();
+        }
+        //admins can edit anyone, users can only edit if they are the manager
+        if (!User.IsInRole("Admin"))
+        {
+            var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            if (location.ManagerId != userId)
+            {
+                return Forbid();
+            }
+        }
+            //properties
         location.Name = dto.Name;
         location.Address = dto.Address;
-        location.TableCount = dto.TableCount;
-
-        //only update mangerId if the role is admin
-        if (isAdmin)
-        {
-            location.ManagerId = dto.ManagerId;
-        }
-        await dataContext.SaveChangesAsync();
-
-        return Ok(new LocationDto
-        {
-            Id = location.Id,
-            Name = location.Name,
-            Address = location.Address,
-            TableCount = location.TableCount,
-            ManagerId = location.ManagerId
-        });
+        location.ManagerId = dto.ManagerId;
+        location.TableCount = dto.TableCount.Value;
+        //save 
+        await _dataContext.SaveChangesAsync();
+        //return updated dto
+        dto.Id = location.Id;
+        return Ok(dto);
     }
 
-                [HttpDelete("{id}")]
-                [Authorize(Roles = "Admin")] //only allow admins to delete locations
-                public async Task<ActionResult> Delete(int id)
-                {
-                    var location = await dataContext.Locations.FindAsync(id);
-                    if (location == null) return NotFound();
 
-                    dataContext.Locations.Remove(location);
-                    await dataContext.SaveChangesAsync();
+    [HttpDelete("{id}")]
+    [Authorize(Roles = "Admin")] //only allow admins to delete locations
+    public async Task<ActionResult> Delete(int id)
+    {
+        var location = await _dataContext.Locations.FindAsync(id);
+        if (location == null)
+        {
+            return NotFound();
+        }
 
-                    return Ok();
+        _dataContext.Locations.Remove(location);
+        await _dataContext.SaveChangesAsync();
 
-                }
+        return Ok();
 
-
-            
-        
-
+    }
     
 }
