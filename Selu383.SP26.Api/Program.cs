@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.SpaServices; 
 using Selu383.SP26.Api.Data;
 using Selu383.SP26.Api.Features.Locations; 
 using Selu383.SP26.Api.Features.Users;
@@ -35,6 +36,7 @@ builder.Services.ConfigureApplicationCookie(options =>
         return Task.CompletedTask;
     };
 });
+
 
 var app = builder.Build();
 using (var scope = app.Services.CreateScope())
@@ -94,12 +96,31 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+app.UseAuthentication(); //checks identity
 app.UseHttpsRedirection();
 
-app.UseAuthentication(); //checks identity
-app.UseAuthorization(); //checks permissions
+app
+    .UseRouting()
+    .UseAuthentication()
+    .UseAuthorization()
+    .UseEndpoints(x =>
+    {
+        x.MapControllers();
+    });
 
-app.MapControllers();
+app.UseStaticFiles();
+
+if (app.Environment.IsDevelopment())
+{
+    app.UseSpa(x =>
+    {
+        x.UseProxyToSpaDevelopmentServer("http://localhost:5173");
+    });
+}
+else
+{
+    app.MapFallbackToFile("/index.html");
+}
 
 app.Run();
 
